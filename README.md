@@ -1,134 +1,196 @@
-# TextVQA Qwen3-VL LoRA Baseline
+# TextVQA Qwen3-VL LoRA + OCR
 
-This repository contains a small VLM fine-tuning baseline for TextVQA. The current implementation fine-tunes `Qwen3-VL-2B-Instruct` with LoRA, but submissions may use any training structure or adaptation method.
+This repository contains the final TextVQA fine-tuning pipeline based on
+`Qwen/Qwen3-VL-2B-Instruct`.  The submitted method is **LoRA fine-tuning with
+dataset-provided OCR tokens**.  The OCR tokens are appended to the text prompt
+and no extra OCR model is used at inference time, so the evaluation-time model
+structure remains the same as the base VLM.
 
-**Deadline:** 3 days.
+## Final method
 
-## Requirements
+- Base model: `Qwen/Qwen3-VL-2B-Instruct`
+- Dataset: `lmms-lab/textvqa`
+- Adaptation: LoRA
+- Extra prompt information: first 8 dataset OCR tokens
+- Main config: `configs/vlm_textvqa_lora_ocr8.yaml`
+- Training budget: controlled by `max_steps: 768` and `max_train_seconds: 3600`
 
-- Training must finish within 1 hour on 2080Ti (1 or 2 GPUs are both acceptable).
-- Test-time latency and FLOPs must be no more than 1.1x the original base model.
-- The submitted model may use LoRA, full fine-tuning, adapters, prompt tuning, or another method, as long as the evaluation budget is respected.
-- Final results should be reported over 3 seeds.
-
-The final submission should include:
-
-- `README.md`
-- `run_prepare.sh`
-- `run_train.sh`
-- `eval_qwen.sh`
-- Merge script if needed, for example `run_merge_lora.sh` and `merge_lora.py`
-- Any required config and source files used by those scripts
-
-## Files
-
-- `configs/vlm_textvqa_lora.yaml`: training configuration.
-- `prepare_textvqa.py`: prepares and caches TextVQA prompts.
-- `train_textvqa_qwen3vl.py`: LoRA fine-tuning script.
-- `run_prepare.sh`: data preparation entrypoint.
-- `run_train.sh`: 2-GPU training entrypoint.
-- `run_merge_lora.sh`: merges a LoRA adapter into the base model.
-- `eval_qwen.sh`: TextVQA evaluation entrypoint based on `lmms-eval`.
-
-## Data And Model
-
-The default config uses:
-
-- **Model:** `Qwen3-VL-2B-Instruct` (local path or Hugging Face)
-- **Dataset:** TextVQA from Hugging Face (`lmms-lab/textvqa`). You can also point `data_path` in the config to local `*.parquet` files.
+Important hyperparameters:
 
 ```yaml
-model_path: Qwen/Qwen3-VL-2B-Instruct
-data_path: lmms-lab/textvqa
+use_ocr_tokens: true
+max_ocr_tokens: 8
+max_steps: 768
+max_train_seconds: 3600
+learning_rate: 0.000015
+lora_r: 32
+lora_alpha: 64
+lora_dropout: 0.03
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
 ```
 
-Prepared data is saved under `data/prepared_textvqa_qwen3vl_seed{seed}`. Training outputs are saved under `outputs/textvqa_qwen3vl_lora_seed{seed}`.
+The prepared data and output directories include `{seed}` to avoid conflicts:
 
-The default prompt does not include dataset-provided OCR tokens.
+```yaml
+prepared_data_dir: ./data/prepared_textvqa_qwen3vl_ocr8_seed{seed}
+output_dir: ./outputs/textvqa_qwen3vl_lora_ocr8_seed{seed}
+```
 
-## Base Model Performance
+## Environment
 
-The original `Qwen3-VL-2B-Instruct` (without fine-tuning) achieves the following on `textvqa_val`:
+The code was tested with:
 
-| Model | exact_match |
-|-------|-------------|
-| Qwen3-VL-2B-Instruct | **69.84%** |
+- Python 3.12.13
+- CUDA 12.4
+- PyTorch 2.6.0+cu124
+- transformers 4.57.0
+- accelerate 1.7.0
+- peft 0.15.2
+- datasets 3.6.0
 
-## Baseline (LoRA Fine-tuned) Performance
-
-This LoRA fine-tuning baseline achieves the following on `textvqa_val` across 3 seeds:
-
-| Seed | exact_match |
-|------|-------------|
-| 1    | 70.63%      |
-| 2    | 70.73%      |
-| 3    | 70.67%      |
-| **Mean** | **70.68%** |
-
-> This is a simple baseline. Students are expected to surpass this score. Achieving a comparable result with better code quality and innovative ideas is also acceptable.
-
-> **Note on GPU environment:** The baseline results above were obtained using 2 GPUs. This is provided for reference only. If you only have a single-GPU environment, don't worry — we will fairly compare your code against this simple LoRA baseline using a single GPU as well.
-
-## Setup
-
-### Environment
-
-You may use the pre-configured shared environment, or install dependencies yourself:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
-cd lmms-eval && pip install -e . && cd ..
+cd lmms-eval
+pip install -e .
+cd ..
 ```
 
-> If you install your own environment, **include your `requirements.txt`** in the submission.
+On Windows PowerShell, the scripts first try to use `.\.conda-env\python.exe`
+and fall back to `python` if the local environment does not exist.
 
-### Coding Style
+## Quick start
 
-You are free to use any workflow (including vibe coding tools like Claude Code, Cursor, GitHub Copilot, etc.) as long as the submitted code is clean, reproducible, and runs correctly.
+### Windows PowerShell
 
-## Quick Start
+Run one seed:
 
-### 1. Prepare data
+```powershell
+cd parameter-golf
 
-```bash
-SEED=1 bash run_prepare.sh
+.\run_prepare_ocr.ps1 -Seed 1
+.\run_train_ocr.ps1 -Seed 1
+.\run_merge_lora_ocr.ps1 -Seed 1
+.\eval_qwen_ocr.ps1 -Seed 1
 ```
 
-### 2. Train
+Run all three seeds:
 
-```bash
-SEED=1 bash run_train.sh
+```powershell
+cd parameter-golf
+
+foreach ($s in 1,2,3) {
+    .\run_prepare_ocr.ps1 -Seed $s
+    .\run_train_ocr.ps1 -Seed $s
+    .\run_merge_lora_ocr.ps1 -Seed $s
+    .\eval_qwen_ocr.ps1 -Seed $s
+}
 ```
 
-For 3 seeds:
+### Linux / Bash
+
+Run one seed:
 
 ```bash
+cd parameter-golf
+
+SEED=1 bash run_prepare_ocr.sh
+SEED=1 bash run_train_ocr.sh
+SEED=1 bash run_merge_lora_ocr.sh
+SEED=1 bash eval_qwen_ocr.sh
+```
+
+Run all three seeds:
+
+```bash
+cd parameter-golf
+
 for seed in 1 2 3; do
-  SEED=$seed bash run_prepare.sh
-  SEED=$seed bash run_train.sh
+  SEED=$seed bash run_prepare_ocr.sh
+  SEED=$seed bash run_train_ocr.sh
+  SEED=$seed bash run_merge_lora_ocr.sh
+  SEED=$seed bash eval_qwen_ocr.sh
 done
 ```
 
-Training is controlled by `max_steps` and `max_train_seconds` in `configs/vlm_textvqa_lora.yaml`.
+## Output paths
 
-### 3. Merge LoRA
+For seed `1`, the default paths are:
 
-```bash
-SEED=1 bash run_merge_lora.sh
+```text
+data/prepared_textvqa_qwen3vl_ocr8_seed1
+outputs/textvqa_qwen3vl_lora_ocr8_seed1/final
+outputs/textvqa_qwen3vl_lora_ocr8_seed1/merged
+results/textvqa/
 ```
 
-The merged model is saved to `outputs/textvqa_qwen3vl_lora_seed1/merged` by default.
+For other seeds, replace `seed1` with `seed2` or `seed3`.
 
-### 4. Evaluate
+## Evaluation
 
-Evaluate the merged model:
+The OCR evaluation uses the task:
 
-```bash
-MODEL_PATH=./outputs/textvqa_qwen3vl_lora_seed1/merged bash eval_qwen.sh
+```text
+textvqa_val_ocr8
 ```
 
-Evaluate the base model:
+The task appends the same OCR prompt format used during training:
 
-```bash
-MODEL_PATH=Qwen/Qwen3-VL-2B-Instruct bash eval_qwen.sh
+```text
+Reference OCR token: token1, token2, ...
+Answer the question using a single word or phrase.
 ```
+
+If `MODEL_PATH` was set by a previous command, `eval_qwen_ocr.ps1` clears it by
+default and evaluates:
+
+```text
+outputs/textvqa_qwen3vl_lora_ocr8_seed{seed}/merged
+```
+
+To evaluate a custom merged model:
+
+```powershell
+.\eval_qwen_ocr.ps1 -Seed 1 -ModelPath "path\to\merged_model"
+```
+
+## Reproduced results
+
+Final LoRA + OCR results on `textvqa_val_ocr8`:
+
+| Seed | exact_match |
+|------|-------------|
+| 1    | 72.500%     |
+| 2    | 72.634%     |
+| 3    | 72.808%     |
+| Mean | 72.647%     |
+
+Reference results:
+
+| Method | exact_match |
+|--------|-------------|
+| Base Qwen3-VL-2B-Instruct | 69.886% |
+| LoRA baseline, 3-seed mean | 70.969% |
+| LoRA + OCR, 3-seed mean | 72.647% |
+
+## Notes for reproducibility
+
+1. `SEED` controls dataset shuffling and training seed.
+2. The output paths contain `{seed}`, so runs with different seeds do not
+   overwrite each other.
+3. Do not submit local artifacts such as `.conda-env/`, `outputs/`,
+   `results/`, or `data/prepared_*`.
+4. If Hugging Face networking is unstable, set `model_path` in the config or
+   `BASE_MODEL` in the merge script to a local model path.  If the model and
+   dataset are already cached, offline mode can be enabled:
+
+```powershell
+$env:HF_HUB_OFFLINE="1"
+$env:TRANSFORMERS_OFFLINE="1"
+```
+
+5. Exact bit-level reproducibility is not guaranteed on GPU fp16 training, but
+   the three-seed results above are reproducible within normal GPU numerical
+   variation.
