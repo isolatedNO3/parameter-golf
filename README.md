@@ -187,3 +187,5 @@ $env:HF_HUB_OFFLINE="1"
 $env:TRANSFORMERS_OFFLINE="1"
 ```
 
+
+Evaluation uses the same dataset-provided OCR tokens as training. The exact_match metric and TextVQA answer normalization are not modified.
