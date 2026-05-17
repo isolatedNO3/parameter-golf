@@ -23,6 +23,10 @@ def load_config(path):
     cfg["seed"] = seed
     cfg["output_dir"] = os.getenv("OUTPUT_DIR", cfg["output_dir"]).format(seed=seed)
     cfg["prepared_data_dir"] = os.getenv("PREPARED_DATA_DIR", cfg["prepared_data_dir"]).format(seed=seed)
+    # Windows multiprocessing can be brittle for DataLoader workers in constrained setups.
+    if os.name == "nt" and int(cfg.get("dataloader_num_workers", 0)) > 0:
+        print("[INFO] Overriding dataloader_num_workers to 0 on Windows")
+        cfg["dataloader_num_workers"] = 0
     return cfg
 
 
@@ -158,6 +162,8 @@ def main():
 
     training_args = TrainingArguments(
         output_dir=cfg["output_dir"],
+        seed=int(cfg["seed"]),
+        data_seed=int(cfg["seed"]),
         max_steps=int(cfg["max_steps"]),
         per_device_train_batch_size=int(cfg["per_device_train_batch_size"]),
         gradient_accumulation_steps=int(cfg["gradient_accumulation_steps"]),

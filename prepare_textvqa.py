@@ -6,7 +6,7 @@ from collections import Counter
 from glob import glob
 
 import yaml
-from datasets import Dataset
+from datasets import Dataset, load_dataset
 
 from lmms_eval.tasks._task_utils.vqa_eval_metric import EvalAIAnswerProcessor
 
@@ -57,17 +57,26 @@ def build_question(item, use_ocr, max_ocr_tokens):
     return question + "\nAnswer the question using a single word or phrase."
 
 
+def load_source_dataset(cfg):
+    data_path = cfg["data_path"]
+    files = sorted(glob(data_path))
+    if files:
+        print(f"[INFO] Loading TextVQA from local parquet files: {len(files)} matched")
+        return Dataset.from_parquet(files)
+
+    dataset_name = cfg.get("data_name")
+    split = cfg.get("data_split", "train")
+    print(f"[INFO] Loading TextVQA from Hugging Face dataset: path={data_path}, name={dataset_name}, split={split}")
+    return load_dataset(data_path, name=dataset_name, split=split)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=DEFAULT_CONFIG)
     args = parser.parse_args()
     cfg = load_config(args.config)
 
-    files = sorted(glob(cfg["data_path"]))
-    if not files:
-        raise FileNotFoundError(f"No parquet files matched data_path={cfg['data_path']}")
-
-    ds = Dataset.from_parquet(files)
+    ds = load_source_dataset(cfg)
     ds = ds.shuffle(seed=cfg["seed"])
     max_samples = int(cfg.get("max_train_samples", 0))
     if max_samples > 0:

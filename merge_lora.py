@@ -9,9 +9,10 @@ from transformers import AutoModelForVision2Seq, AutoProcessor
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base_model", default="/storage/data/shiyd2023/LLM_model/Qwen3-VL-2B-Instruct")
-    parser.add_argument("--adapter", default="./outputs/textvqa_qwen3vl_lora_seed1/final")
-    parser.add_argument("--output", default="./outputs/textvqa_qwen3vl_lora_seed1/merged")
+    seed = os.getenv("SEED", "1")
+    parser.add_argument("--base_model", default="Qwen/Qwen3-VL-2B-Instruct")
+    parser.add_argument("--adapter", default=f"./outputs/textvqa_qwen3vl_lora_seed{seed}/final")
+    parser.add_argument("--output", default=f"./outputs/textvqa_qwen3vl_lora_seed{seed}/merged")
     parser.add_argument("--dtype", choices=["float16", "bfloat16", "float32"], default="float16")
     args = parser.parse_args()
 
