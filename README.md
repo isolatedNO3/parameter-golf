@@ -175,14 +175,10 @@ Reference results:
 | LoRA baseline, 3-seed mean | 70.969% |
 | LoRA + OCR, 3-seed mean | 72.647% |
 
-## Notes for reproducibility
+## Notes 
 
-1. `SEED` controls dataset shuffling and training seed.
-2. The output paths contain `{seed}`, so runs with different seeds do not
-   overwrite each other.
-3. Do not submit local artifacts such as `.conda-env/`, `outputs/`,
-   `results/`, or `data/prepared_*`.
-4. If Hugging Face networking is unstable, set `model_path` in the config or
+
+If Hugging Face networking is unstable, set `model_path` in the config or
    `BASE_MODEL` in the merge script to a local model path.  If the model and
    dataset are already cached, offline mode can be enabled:
 
@@ -191,6 +187,3 @@ $env:HF_HUB_OFFLINE="1"
 $env:TRANSFORMERS_OFFLINE="1"
 ```
 
-5. Exact bit-level reproducibility is not guaranteed on GPU fp16 training, but
-   the three-seed results above are reproducible within normal GPU numerical
-   variation.
