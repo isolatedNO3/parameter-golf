@@ -49,6 +49,41 @@ def _resolve_model_class(pretrained: str, is_moe: bool):
     return model_cls, dtype_key
 
 
+def _ensure_peft_prompt_tuning_config_compat(model):
+    """Expose Qwen3-VL text config fields expected by PEFT prompt tuning."""
+    text_config = getattr(model.config, "text_config", None)
+    if text_config is None:
+        return
+    if not hasattr(model.config, "vocab_size") and hasattr(text_config, "vocab_size"):
+        model.config.vocab_size = text_config.vocab_size
+    if not hasattr(model.config, "hidden_size") and hasattr(text_config, "hidden_size"):
+        model.config.hidden_size = text_config.hidden_size
+
+
+def _import_bottleneck_adapter_loader():
+    """Import the project-level adapter loader when lmms-eval is launched as an exe.
+
+    On Windows, .conda-env/Scripts/lmms-eval.exe may not include the repository
+    root in sys.path, so a plain `import adapter_utils` can fail even when the
+    command is run from the project directory.
+    """
+    try:
+        from adapter_utils import load_bottleneck_adapter
+
+        return load_bottleneck_adapter
+    except ModuleNotFoundError:
+        import sys
+        from pathlib import Path
+
+        for parent in Path(__file__).resolve().parents:
+            if (parent / "adapter_utils.py").is_file() and str(parent) not in sys.path:
+                sys.path.insert(0, str(parent))
+                from adapter_utils import load_bottleneck_adapter
+
+                return load_bottleneck_adapter
+        raise
+
+
 @register_model("qwen3_vl")
 class Qwen3_VL(lmms):
     """
@@ -85,10 +120,22 @@ class Qwen3_VL(lmms):
         interleave_visuals: Optional[bool] = False,
         enable_thinking: Optional[bool] = None,
         reasoning_prompt: Optional[str] = None,
+        peft_adapter: Optional[str] = None,
+        bottleneck_adapter: Optional[str] = None,
         **kwargs,
     ) -> None:
         super().__init__()
         assert kwargs == {}, f"Unexpected kwargs: {kwargs}"
+
+        # lmms-eval model_args are often parsed as strings; coerce numeric fields here.
+        batch_size = int(batch_size)
+        min_pixels = int(min_pixels)
+        max_pixels = int(max_pixels)
+        if total_pixels is not None:
+            total_pixels = int(total_pixels)
+        max_num_frames = int(max_num_frames)
+        if fps is not None:
+            fps = float(fps)
 
         valid_attn_implementations = [None, "flash_attention_2", "sdpa", "eager"]
         if attn_implementation not in valid_attn_implementations:
@@ -115,6 +162,17 @@ class Qwen3_VL(lmms):
             model_kwargs["attn_implementation"] = attn_implementation
 
         self._model = model_cls.from_pretrained(pretrained, **model_kwargs).eval()
+        if peft_adapter not in (None, "", "none", "None"):
+            from peft import PeftModel
+
+            eval_logger.info(f"Loading PEFT adapter from {peft_adapter}")
+            _ensure_peft_prompt_tuning_config_compat(self._model)
+            self._model = PeftModel.from_pretrained(self._model, peft_adapter).eval()
+        if bottleneck_adapter not in (None, "", "none", "None"):
+            eval_logger.info(f"Loading bottleneck adapter from {bottleneck_adapter}")
+            load_bottleneck_adapter = _import_bottleneck_adapter_loader()
+            load_bottleneck_adapter(self._model, bottleneck_adapter)
+            self._model.eval()
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
         self.total_pixels = total_pixels
@@ -134,7 +192,7 @@ class Qwen3_VL(lmms):
 
         self._config = self.model.config
         self._max_length = 2048
-        self.batch_size_per_gpu = int(batch_size)
+        self.batch_size_per_gpu = batch_size
         self.use_cache = use_cache
 
         if accelerator.num_processes > 1:
