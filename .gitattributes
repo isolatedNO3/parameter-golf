@@ -1,9 +1,11 @@
 # Normalize text files automatically.
 * text=auto
 
-# Keep repository attributes and Markdown files with LF line endings.
+# Keep repository attributes, Markdown, and scripts with LF line endings.
 .gitattributes text eol=lf
 *.md text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf
 
 # Treat PDFs as binary files.
 *.pdf binary
